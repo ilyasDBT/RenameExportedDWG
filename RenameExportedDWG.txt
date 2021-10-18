@@ -1,0 +1,75 @@
+Sub Dialog_RenameExportedDWG()
+    'This code is run from Excel VBA. It uses Inventor Apprentice Server, hence the reference must be added.
+    'Add reference to Autodesk Inventor Object Library (C:\Program Files\Autodesk\Inventor 20XX\Bin\RxInventor.tlb)
+    'This function allows user to browse for exported dwg files, and the inventor drawing source folder.
+    'The function will then find the source document in the source folder, with the exported dwg filename wihtout extension.
+    'It will then read the revision number property of the source file and rename the exported dwg file with the suffix _rev_[revision number]
+    
+    'Browse for source file directory
+    Dim sourceFolderDlg As FileDialog
+    Set sourceFolderDlg = Application.FileDialog(msoFileDialogFolderPicker)
+    sourceFolderDlg.Title = "Source Inventor Drawing Folder"
+    Call sourceFolderDlg.Show
+    If sourceFolderDlg.SelectedItems.Item(1) = "" Then End
+    Dim sourceFolder As String
+    sourceFolder = sourceFolderDlg.SelectedItems.Item(1)
+
+
+    'Browse for exported files
+    Dim OpenFileDlg As FileDialog
+    Set OpenFileDlg = Application.FileDialog(msoFileDialogFilePicker)
+    With OpenFileDlg
+        .Title = "Exported DWG"
+        .Filters.Clear
+        .Filters.Add "DWG Files", "*.dwg"
+        .AllowMultiSelect = True
+    End With
+    Call OpenFileDlg.Show
+    If OpenFileDlg.SelectedItems.Count = 0 Then End
+
+    Dim countSuccess As Integer
+    countSuccess = 0
+    Dim countFailed As Integer
+    countFailed = 0
+    For Each filePath In OpenFileDlg.SelectedItems
+        If RenameExportedDWG(filePath, sourceFolder) Then
+            countSuccess = countSuccess + 1
+        Else
+            countFailed = countFailed + 1
+        End If
+    Next filePath
+
+    MsgBox ("Success: " & countSuccess & vbCrLf & "Failed: " & countFailed)
+End Sub
+
+Function RenameExportedDWG(ByVal filePath As String, sourceDirectory As String) As Boolean
+    RenameExportedDWG = False 'set initial return value as false
+    
+    'get file name without extension
+    Dim fileName As String
+    fileName = Right(filePath, Len(filePath) - InStrRev(filePath, "\"))
+    fileName = Left(fileName, Len(fileName) - 4)
+    
+    Dim sourcePath As String
+    sourcePath = sourceDirectory & "\" & fileName
+    If Dir(sourcePath) = "" Then Exit Function 'exit if source file not found
+    
+    'Important: Add reference to Autodesk Inventor Object Library (C:\Program Files\Autodesk\Inventor 20XX\Bin\RxInventor.tlb)
+    Dim apprentice As ApprenticeServerComponent
+    Set apprentice = New ApprenticeServerComponent
+    Dim apprenticeDoc As ApprenticeServerDocument
+    Set apprenticeDoc = apprentice.Open(sourcePath)
+    Dim revision As String
+    revision = apprenticeDoc.PropertySets.Item("Inventor Summary Information").Item("Revision Number").Value
+    Call apprenticeDoc.Close
+    Call apprentice.Close
+
+    Dim newName As String
+    newName = fileName & "_rev_" & revision & ".dwg"
+
+    On Error GoTo 10
+    Name filePath As newName
+    GoTo 20
+10  Exit Function
+20  RenameExportedDWG = True
+End Function
